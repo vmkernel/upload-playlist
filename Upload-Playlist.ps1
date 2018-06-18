@@ -137,6 +137,7 @@ function Upload-Playlist {
                     $strTitle = 'UNTITLED TRACK';
                 }
 
+                # TODO: Convert to integer all data
                 $strTrack = $arrTracks[$idx].Track;
                 if ( [System.String]::IsNullOrEmpty( $strTrack ) ) {
                     $strTrack  = "0";
