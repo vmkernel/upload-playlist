@@ -1,6 +1,8 @@
 # This script parses AIMP playlist and copy all tracks (with specific file name format) from the list to a specified folder
 # © Aleksey Ivanov, 2018
 
+# TODO: Add parameter "-AllInOneDirectory" to copy all track to a specified top level directory (to use with specific playlists like 'Electronic music', 'Dance music', etc...)
+
 function Replace-SpecialSymbols {
     [CmdletBinding()]
     param (
