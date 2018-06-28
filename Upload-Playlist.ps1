@@ -14,23 +14,17 @@ function Replace-SpecialSymbols {
     )
 
     begin {
-        #$arrSpecialSymbols = ( # List of symbols that should be replaced
-        #    '*', '\', '/', '.', '?', ':' );
         $strSpecialSymbolsRegExFilter = "(\*|\\|/|\?|:)+"; # List of symbols that should be replaced
         $strReplacement = ' '; # Symbols that will be used for replacement
     }
 
     process {
-        #$strResult = $String;
-        #foreach ( $strSymbol in $arrSpecialSymbols ) {
-        #    $strResult = $strResult.Replace( $strSymbol, $strReplacement );
-        #}
-
-        $strResult = $String -replace $strSpecialSymbolsRegExFilter, $strReplacement;
-
-        # TODO: Trim spaces from start and end of the string
-        # TODO: Replace double spaces
-
+        # TODO: Check the double white-spaces removal and single white-spaces trimming
+        $strResult = $String -replace $strSpecialSymbolsRegExFilter, $strReplacement; # Replacing special symbols
+        $strResult = $strResult.Trim(); # Trimming white-spaces
+        while ( $strResult.Contains( '  ' ) ) { # Removing double white-spaces
+            $strResult = $strResult.Replace( '  ', ' ' );
+        }
         return $strResult;
     }
 
@@ -121,8 +115,7 @@ function Upload-Playlist {
             $arrTracks = @();
             $arrTracks += Import-AimpPlaylist -Path $Playlist;
 
-            for ( $idx = 0; $idx -lt $arrTracks.Count; $idx++ ) {
-                # Checking path to artist folder
+            for ( $idx = 0; $idx -lt $arrTracks.Count; $idx++ ) { # Checking path to artist folder
                 $strArtist = Replace-SpecialSymbols -String $arrTracks[$idx].Artist;
                 $strDestinationFolder = "$Destination\$strArtist";
                 if ( -not [System.IO.Directory]::Exists( $strDestinationFolder ) ) {
@@ -131,7 +124,11 @@ function Upload-Playlist {
 
                 $iDisk = 1;
                 if ( -not [System.String]::IsNullOrEmpty( $arrTracks[$idx].Disk ) ) {
-                    $iDisk = [System.Convert]::ToInt32($arrTracks[$idx].Disk);
+                    try {
+                        $iDisk = [System.Convert]::ToInt32( $arrTracks[$idx].Disk );
+                    } catch { 
+                        # nothing to do
+                    }
                 } 
                 
                 $strTitle = Replace-SpecialSymbols -String $arrTracks[$idx].Title;
@@ -139,24 +136,33 @@ function Upload-Playlist {
                     $strTitle = 'UNTITLED TRACK';
                 }
 
-                # TODO: Convert to integer all data
-                $strTrack = $arrTracks[$idx].Track;
-                if ( [System.String]::IsNullOrEmpty( $strTrack ) ) {
-                    $strTrack  = "0";
+                # TODO: Check the conversion to integer
+                $iTrack = 0;
+                if ( -not [System.String]::IsNullOrEmpty( $arrTracks[$idx].Track ) ) {
+                    try {
+                        $iTrack = [System.Convert]::ToInt32( $arrTracks[$idx].Track );
+                    } catch {
+                        # nothing to do
+                    }
                 }
 
-                $strYear = $arrTracks[$idx].Year;
-                if ( [System.String]::IsNullOrEmpty( $strYear ) ) {
-                    $strYear  = "0000";
+                # TODO: Check the conversion to integer
+                $iYear = 0;
+                if ( -not [System.String]::IsNullOrEmpty( $arrTracks[$idx].Year ) ) {
+                    try {
+                        $iYear = [System.Convert]::ToInt32( $arrTracks[$idx].Year );
+                    } catch {
+                        # nothing to do
+                    }
                 }
 
                 if ( $iDisk -gt 1 ) { # In case of more than one disks in the album
                     # "<Year>-<Disk><Track>-<Title>.mp3" (eg.: 2004 202.Wish I Had Angel (Instrumental).mp3)    
-                    $strDestinationFileName = [System.String]::Format( "{0:0000}-{1}{2:00}-{3}.mp3", $strYear, $iDisk, $strTrack, $strTitle );    
+                    $strDestinationFileName = [System.String]::Format( "{0:0000}-{1}{2:00}-{3}.mp3", $iYear, $iDisk, $iTrack, $strTitle );    
 
                 } else {
                     # "<Year>-<Track>-<Title>.mp3" (eg.: 2004 02.Wish I Had Angel.mp3)
-                    $strDestinationFileName = [System.String]::Format( "{0:0000}-{1:00}-{2}.mp3", $strYear, $strTrack, $strTitle );
+                    $strDestinationFileName = [System.String]::Format( "{0:0000}-{1:00}-{2}.mp3", $iYear, $iTrack, $strTitle );
                 }
                 
                 Copy-Item -Path ($arrTracks[$idx].FilePath) -Destination "$strDestinationFolder\$strDestinationFileName";
