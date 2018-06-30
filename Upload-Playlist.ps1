@@ -1,12 +1,10 @@
 # This script parses AIMP playlist and copy all tracks (with specific file name format) from the list to a specified folder
 # © Aleksey Ivanov, 2018
-
-# TODO: Add parameter "-AllInOneDirectory" to copy all track to a specified top level directory (to use with specific playlists like 'Electronic music', 'Dance music', etc...)
-
 function Replace-SpecialSymbols {
     [CmdletBinding()]
     param (
-        [parameter (
+        # Input string(s)
+        [parameter(
             Mandatory = $true,
             ValueFromPipeline = $true)]
         [ValidateNotNullOrEmpty()]
@@ -14,12 +12,11 @@ function Replace-SpecialSymbols {
     )
 
     begin {
-        $strSpecialSymbolsRegExFilter = "(\*|\\|/|\?|:)+"; # List of symbols that should be replaced
+        $strSpecialSymbolsRegExFilter = "(\*|\\|/|\?|:|<|>)+"; # List of symbols that should be replaced
         $strReplacement = ' '; # Symbols that will be used for replacement
     }
 
     process {
-        # TODO: Check the double white-spaces removal and single white-spaces trimming
         $strResult = $String -replace $strSpecialSymbolsRegExFilter, $strReplacement; # Replacing special symbols
         $strResult = $strResult.Trim(); # Trimming white-spaces
         while ( $strResult.Contains( '  ' ) ) { # Removing double white-spaces
@@ -34,6 +31,7 @@ function Replace-SpecialSymbols {
 function Import-AimpPlaylist {
     [CmdletBinding()]
     param (
+        # Path to playlist(s) that will be imported
         [parameter( 
             Mandatory = $true,
             ValueFromPipeline = $true)]
@@ -80,17 +78,26 @@ function Import-AimpPlaylist {
 function Upload-Playlist {
     [CmdletBinding()]
     param(
-        [Parameter( 
+        # Path to playlist(s) that will be uploaded to a destination folder
+        [parameter( 
             Mandatory = $true, 
             ValueFromPipeline = $true )]
         [ValidateNotNullOrEmpty()]
         [System.String]
         $Playlist,
 
-        [Parameter( Mandatory = $true )]
+        # The destinations folder which will contain files uploaded from the playlist(s)
+        [parameter( Mandatory = $true )]
         [ValidateNotNullOrEmpty()]
         [System.String]
-        $Destination
+        $Destination,
+
+        # Place all tracks from the playlist(s) to one folder. No separate folder for each artists will be created
+        [parameter( 
+            Mandatory = $false,
+            ValueFromPipeline = $false )]
+        [switch]
+        $AllInOne
     )
 
     begin {
@@ -106,6 +113,7 @@ function Upload-Playlist {
     }
 
     process {
+
         if ( -not $bStop ) {
             if ( -not [System.IO.File]::Exists( $Playlist ) ) {
                 Write-Error -Message 'The specified playlist file not exists' -Category ObjectNotFound -TargetObject $Playlist;
@@ -114,59 +122,87 @@ function Upload-Playlist {
 
             $arrTracks = @();
             $arrTracks += Import-AimpPlaylist -Path $Playlist;
+            Write-Verbose -Message "$($arrTracks.Count) track(s) imported";
 
             for ( $idx = 0; $idx -lt $arrTracks.Count; $idx++ ) { # Checking path to artist folder
+                
+                Write-Progress -Id 0 -Activity "Copying tracks" -Status "Processing track $($idx + 1) of $($arrTracks.Count)" -PercentComplete ( ($idx + 1) * 100 / $arrTracks.Count );
                 $strArtist = Replace-SpecialSymbols -String $arrTracks[$idx].Artist;
-                $strDestinationFolder = "$Destination\$strArtist";
-                if ( -not [System.IO.Directory]::Exists( $strDestinationFolder ) ) {
-                    New-Item -ItemType Directory -Path "$strDestinationFolder" | Out-Null;
+                if ( [System.String]::IsNullOrEmpty( $strArtist ) ) {
+                    $strArtist = 'UNKNOWN ARTIST';
                 }
 
-                $iDisk = 1;
-                if ( -not [System.String]::IsNullOrEmpty( $arrTracks[$idx].Disk ) ) {
-                    try {
-                        $iDisk = [System.Convert]::ToInt32( $arrTracks[$idx].Disk );
-                    } catch { 
-                        # nothing to do
-                    }
-                } 
-                
                 $strTitle = Replace-SpecialSymbols -String $arrTracks[$idx].Title;
                 if ( [System.String]::IsNullOrEmpty( $strTitle ) ) {
                     $strTitle = 'UNTITLED TRACK';
                 }
 
-                # TODO: Check the conversion to integer
-                $iTrack = 0;
-                if ( -not [System.String]::IsNullOrEmpty( $arrTracks[$idx].Track ) ) {
-                    try {
-                        $iTrack = [System.Convert]::ToInt32( $arrTracks[$idx].Track );
-                    } catch {
-                        # nothing to do
+                if ( -not ($AllInOne.IsPresent) ) { # Should use separate directories for each artist
+
+                    $strDestinationFolder = "$Destination\$strArtist";
+                    if ( -not [System.IO.Directory]::Exists( $strDestinationFolder ) ) {
+                        New-Item -ItemType Directory -Path "$strDestinationFolder" | Out-Null;
                     }
-                }
 
-                # TODO: Check the conversion to integer
-                $iYear = 0;
-                if ( -not [System.String]::IsNullOrEmpty( $arrTracks[$idx].Year ) ) {
-                    try {
-                        $iYear = [System.Convert]::ToInt32( $arrTracks[$idx].Year );
-                    } catch {
-                        # nothing to do
+                    # TODO: Check the conversion to integer
+                    $iTrack = 0;
+                    if ( -not [System.String]::IsNullOrEmpty( $arrTracks[$idx].Track ) ) {
+                        try {
+                            $iTrack = [System.Convert]::ToInt32( $arrTracks[$idx].Track );
+                        } catch {
+                            # nothing to do
+                        }
                     }
+
+                    # TODO: Check the conversion to integer
+                    $iYear = 0;
+                    if ( -not [System.String]::IsNullOrEmpty( $arrTracks[$idx].Year ) ) {
+                        try {
+                            $iYear = [System.Convert]::ToInt32( $arrTracks[$idx].Year );
+                        } catch {
+                            # nothing to do
+                        }
+                    }
+
+                    $iDisk = 1;
+                    if ( -not [System.String]::IsNullOrEmpty( $arrTracks[$idx].Disk ) ) {
+                        try {
+                            $iDisk = [System.Convert]::ToInt32( $arrTracks[$idx].Disk );
+                        } catch { 
+                            # nothing to do
+                        }
+                    } 
+
+                    if ( $iDisk -gt 1 ) { # In case of more than one disks in the album
+                        # "<Year>-<Disk><Track>-<Title>.mp3" (eg.: 2004 202.Wish I Had Angel (Instrumental).mp3)    
+                        $strDestinationFileName = [System.String]::Format( "{0:0000}-{1}{2:00}-{3}.mp3", $iYear, $iDisk, $iTrack, $strTitle );    
+
+                    } else {
+                        # "<Year>-<Track>-<Title>.mp3" (eg.: 2004 02.Wish I Had Angel.mp3)
+                        $strDestinationFileName = [System.String]::Format( "{0:0000}-{1:00}-{2}.mp3", $iYear, $iTrack, $strTitle );
+                    }
+
+                } else { # Should use one destination directory for all tracks
+
+                    $strDestinationFolder = "$Destination";
+                    $strDestinationFileName = [System.String]::Format( "{0} - {1}.mp3", $strArtist, $strTitle );
                 }
 
-                if ( $iDisk -gt 1 ) { # In case of more than one disks in the album
-                    # "<Year>-<Disk><Track>-<Title>.mp3" (eg.: 2004 202.Wish I Had Angel (Instrumental).mp3)    
-                    $strDestinationFileName = [System.String]::Format( "{0:0000}-{1}{2:00}-{3}.mp3", $iYear, $iDisk, $iTrack, $strTitle );    
+                try {
+                    Copy-Item -Path ($arrTracks[$idx].FilePath) -Destination "$strDestinationFolder\$strDestinationFileName";
 
-                } else {
-                    # "<Year>-<Track>-<Title>.mp3" (eg.: 2004 02.Wish I Had Angel.mp3)
-                    $strDestinationFileName = [System.String]::Format( "{0:0000}-{1:00}-{2}.mp3", $iYear, $iTrack, $strTitle );
+                } catch {
+                    Write-Error `
+                        -Message (
+                            "The script has failed to copy the file:`n"+
+                            "Source path: $($arrTracks[$idx].FilePath)`n"+
+                            "Destination path: $strDestinationFolder\$strDestinationFileName"
+                         ) `
+                        -Exception $_.Exception `
+                        -TargetObject $arrTracks[$idx].FilePath;
                 }
-                
-                Copy-Item -Path ($arrTracks[$idx].FilePath) -Destination "$strDestinationFolder\$strDestinationFileName";
             }
+            Write-Progress -Id 0 -Activity "Copying tracks" -Status "Done" -Completed;
         }
     }
 
