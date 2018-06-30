@@ -144,7 +144,6 @@ function Upload-Playlist {
                         New-Item -ItemType Directory -Path "$strDestinationFolder" | Out-Null;
                     }
 
-                    # TODO: Check the conversion to integer
                     $iTrack = 0;
                     if ( -not [System.String]::IsNullOrEmpty( $arrTracks[$idx].Track ) ) {
                         try {
@@ -154,7 +153,6 @@ function Upload-Playlist {
                         }
                     }
 
-                    # TODO: Check the conversion to integer
                     $iYear = 0;
                     if ( -not [System.String]::IsNullOrEmpty( $arrTracks[$idx].Year ) ) {
                         try {
