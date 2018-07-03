@@ -1,6 +1,9 @@
 # This script parses AIMP playlist and copy all tracks (with specific file name format) from the list to a specified folder
 # © Aleksey Ivanov, 2018
-function Replace-SpecialSymbols {
+function Replace-SpecialCharacters {
+    #FEATURE: Use hash-tables to specify one-to-one replacement rules for individual special characters
+    # e.g.: *, \, /, ?, <, > (replaced with dash) -
+    # e.g.: : (replaced with space)
     [CmdletBinding()]
     param (
         # Input string(s)
@@ -93,11 +96,14 @@ function Upload-Playlist {
         $Destination,
 
         # Place all tracks from the playlist(s) to one folder. No separate folder for each artists will be created
-        [parameter( 
-            Mandatory = $false,
-            ValueFromPipeline = $false )]
+        [parameter( Mandatory = $false )]
         [switch]
-        $AllInOne
+        $AllInOne,
+
+        # Show copy status for each file
+        [parameter( Mandatory = $false )]
+        [switch]
+        $PassThru
     )
 
     begin {
@@ -110,6 +116,8 @@ function Upload-Playlist {
                 $bStop = $true;
             }
         }
+
+        $arrResult = @();
     }
 
     process {
@@ -127,12 +135,12 @@ function Upload-Playlist {
             for ( $idx = 0; $idx -lt $arrTracks.Count; $idx++ ) { # Checking path to artist folder
                 
                 Write-Progress -Id 0 -Activity "Copying tracks" -Status "Processing track $($idx + 1) of $($arrTracks.Count)" -PercentComplete ( ($idx + 1) * 100 / $arrTracks.Count );
-                $strArtist = Replace-SpecialSymbols -String $arrTracks[$idx].Artist;
+                $strArtist = Replace-SpecialCharacters -String $arrTracks[$idx].Artist;
                 if ( [System.String]::IsNullOrEmpty( $strArtist ) ) {
                     $strArtist = 'UNKNOWN ARTIST';
                 }
 
-                $strTitle = Replace-SpecialSymbols -String $arrTracks[$idx].Title;
+                $strTitle = Replace-SpecialCharacters -String $arrTracks[$idx].Title;
                 if ( [System.String]::IsNullOrEmpty( $strTitle ) ) {
                     $strTitle = 'UNTITLED TRACK';
                 }
@@ -186,23 +194,51 @@ function Upload-Playlist {
                     $strDestinationFileName = [System.String]::Format( "{0} - {1}.mp3", $strArtist, $strTitle );
                 }
 
+                $strDestinationPath = "$strDestinationFolder\$strDestinationFileName";
+                Write-Verbose -Message (
+                    "Processing track ($($idx+1) of $($arrTracks.Count))`n" +
+                    "Source: $($arrTracks[$idx].FilePath) `n" +
+                    "Destination: $strDestinationPath`n");
+
+                $objFileCopyStatus = New-Object PSObject -Property ([ordered]@{
+                    Source = $null
+                    Destination = $null
+                    Status = $null
+                    Message = $null
+                });
+                $objFileCopyStatus.Source = $arrTracks[$idx].FilePath;
+                $objFileCopyStatus.Destination = $strDestinationPath;
+
                 try {
-                    Copy-Item -Path ($arrTracks[$idx].FilePath) -Destination "$strDestinationFolder\$strDestinationFileName";
+                    $objResult = Copy-Item -Force -LiteralPath ($arrTracks[$idx].FilePath) -Destination "$strDestinationPath" -PassThru;
+                    if ( $objResult -eq $null ) {
+                        throw ( New-Object System.Exception "File was not copied." );
+                    }
+                    $objFileCopyStatus.Status = 'OK';
+                    $objFileCopyStatus.Message = 'The file successfully copied';
 
                 } catch {
+
+                    $objFileCopyStatus.Status = 'Error';
+                    $objFileCopyStatus.Message = $_.Exception.Message;
+
                     Write-Error `
                         -Message (
-                            "The script has failed to copy the file:`n"+
-                            "Source path: $($arrTracks[$idx].FilePath)`n"+
-                            "Destination path: $strDestinationFolder\$strDestinationFileName"
-                         ) `
+                            "The script has failed to copy the file:`n" +
+                            "Source: $($arrTracks[$idx].FilePath)`n" +
+                            "Destination: $strDestinationPath`n" +
+                            "Exception: $($_.Exception.Message)" ) `
                         -Exception $_.Exception `
                         -TargetObject $arrTracks[$idx].FilePath;
                 }
+
+                $arrResult += $objFileCopyStatus;
             }
             Write-Progress -Id 0 -Activity "Copying tracks" -Status "Done" -Completed;
         }
     }
 
-    end {}
+    end {
+        $arrResult;
+    }
 }
