@@ -1,5 +1,6 @@
 # This script parses AIMP playlist and copy all tracks (with specific file name format) from the list to a specified folder
 # © Aleksey Ivanov, 2018
+
 function Replace-SpecialCharacters {
     #FEATURE: Use hash-tables to specify one-to-one replacement rules for individual special characters
     # e.g.: *, \, /, ?, <, > (replaced with dash) -
