@@ -101,6 +101,11 @@ function Upload-Playlist {
         [switch]
         $AllInOne,
 
+        # Overwrite existing files
+        [parameter( Mandatory = $false )]
+        [switch]
+        $Force,
+
         # Show copy status for each file
         [parameter( Mandatory = $false )]
         [switch]
@@ -196,11 +201,6 @@ function Upload-Playlist {
                 }
 
                 $strDestinationPath = "$strDestinationFolder\$strDestinationFileName";
-                Write-Verbose -Message (
-                    "Processing track ($($idx+1) of $($arrTracks.Count))`n" +
-                    "Source: $($arrTracks[$idx].FilePath) `n" +
-                    "Destination: $strDestinationPath`n");
-
                 $objFileCopyStatus = New-Object PSObject -Property ([ordered]@{
                     Source = $null
                     Destination = $null
@@ -209,6 +209,20 @@ function Upload-Playlist {
                 });
                 $objFileCopyStatus.Source = $arrTracks[$idx].FilePath;
                 $objFileCopyStatus.Destination = $strDestinationPath;
+
+                $strVerboseMessage = 
+                    "Processing track ($($idx+1) of $($arrTracks.Count))`n" +
+                    "Source: $($arrTracks[$idx].FilePath) `n" +
+                    "Destination: $strDestinationPath`n";
+
+                if ( -not $Force.IsPresent ) { # If no -Force parameter was specified
+                    if ( [System.IO.File]::Exists( $strDestinationPath ) ) { # checking if the file already exists 
+                        $strVerboseMessage += "SKIPPING the file as it already exists at the destination.`n";
+                        Write-Verbose -Message $strVerboseMessage;
+                        continue; # and skipping it if it exists
+                    }
+                }
+                Write-Verbose -Message $strVerboseMessage;
 
                 try {
                     $objResult = Copy-Item -Force -LiteralPath ($arrTracks[$idx].FilePath) -Destination "$strDestinationPath" -PassThru;
